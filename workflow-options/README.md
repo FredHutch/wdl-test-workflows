@@ -1,5 +1,5 @@
 # Intro to Workflow Options
-You can read more about Crowmell workflow options [here](https://cromwell.readthedocs.io/en/stable/wf_options/Overview/).
+You can read more about Cromwell workflow options [here](https://cromwell.readthedocs.io/en/stable/wf_options/Overview/).
 
 ## Common workflow option variables:
 

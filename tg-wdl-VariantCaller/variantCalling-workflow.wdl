@@ -39,7 +39,6 @@ struct referenceData {
   File dbSNP_vcf_index
   Array[File] known_indels_sites_VCFs
   Array[File] known_indels_sites_indices
-  String annovarDIR
   String annovar_protocols
   String annovar_operation
 }
@@ -47,16 +46,14 @@ struct referenceData {
 
 workflow Panel_BWA_GATK4_Annovar {
   input {
-  # Batch File import
-  Array[sampleInputs] sampleBatch
-  # Reference Data
-  referenceData referenceGenome
-
-  # Gizmo Easybuild Modules this has been tested with
-  String GATKModule = "GATK/4.1.0.0-foss-2018b-Python-3.6.6"
-  String samtoolsModule = "SAMtools/1.16.1-GCC-11.2.0"
-  String perlModule = "Perl/5.28.0-GCCcore-7.3.0"
-  String bwaModule = "BWA/0.7.17-GCCcore-11.2.0"
+    # Batch File import
+    Array[sampleInputs] sampleBatch
+    # Reference Data
+    referenceData referenceGenome
+    # Gizmo Easybuild Modules this has been tested with
+    String GATKDocker = "ghcr.io/getwilds/gatk:4.3.0.0"
+    String annovarDocker = "ghcr.io/getwilds/annovar:hg38" # REPLACE WITH REFNAME!!!
+    String bwaDocker = "ghcr.io/getwilds/bwa:0.7.17"
   }
 
 
@@ -74,14 +71,14 @@ scatter (sample in sampleBatch){
     input:
       unsorted_bed = bed,
       ref_dict = referenceGenome.ref_dict,
-      taskModules = GATKModule
+      taskDocker = GATKDocker
   }
   # convert unmapped bam to fastq
   call SamToFastq {
     input:
       input_bam = bam,
       base_file_name = base_file_name,
-      taskModules = GATKModule
+      taskDocker = GATKDocker
   }
 
 #  Map reads to reference
@@ -99,7 +96,7 @@ scatter (sample in sampleBatch){
       ref_pac = referenceGenome.ref_pac,
       ref_sa = referenceGenome.ref_sa,
       cpuNeeded = 4,
-      taskModules = bwaModule + " " + samtoolsModule
+      taskDocker = bwaDocker
   }
 
   # Merge original uBAM and BWA-aligned BAM
@@ -111,7 +108,7 @@ scatter (sample in sampleBatch){
       ref_fasta = referenceGenome.ref_fasta,
       ref_fasta_index = referenceGenome.ref_fasta_index,
       ref_dict = referenceGenome.ref_dict,
-      taskModules = GATKModule
+      taskDocker = GATKDocker
   }
 
   # Generate the recalibration model by interval
@@ -128,7 +125,7 @@ scatter (sample in sampleBatch){
       ref_dict = referenceGenome.ref_dict,
       ref_fasta = referenceGenome.ref_fasta,
       ref_fasta_index = referenceGenome.ref_fasta_index,
-      taskModules = GATKModule + " " + samtoolsModule
+      taskDocker = GATKDocker
     }
 
     # Generate haplotype caller vcf
@@ -142,7 +139,7 @@ scatter (sample in sampleBatch){
         ref_fasta = referenceGenome.ref_fasta,
         ref_fasta_index = referenceGenome.ref_fasta_index,
         dbSNP_vcf = referenceGenome.dbSNP_vcf,
-        taskModules = GATKModule
+        taskDocker = GATKDocker
     }
 
     # Annotate variants
@@ -153,8 +150,7 @@ scatter (sample in sampleBatch){
         base_file_name = base_file_name,
         annovar_operation = referenceGenome.annovar_operation,
         annovar_protocols = referenceGenome.annovar_protocols,
-        annovarDIR = referenceGenome.annovarDIR,
-        taskModules = perlModule
+        taskDocker = annovarDocker
     }
 
   # End scatter 
@@ -177,7 +173,7 @@ task SortBed {
   input {
   File unsorted_bed
   File ref_dict
-  String taskModules
+  String taskDocker
   }
   command {
     set -eo pipefail
@@ -188,12 +184,12 @@ task SortBed {
     echo "Transform bed file to intervals list with Picard----------------------------------------"
     gatk --java-options "-Xms4g" \
       BedToIntervalList \
-      -I=sorted.bed \
-      -O=sorted.interval_list \
-      -SD=~{ref_dict}
+      -I sorted.bed \
+      -O sorted.interval_list \
+      -SD ~{ref_dict}
   }
   runtime {
-    modules: taskModules
+    docker: taskDocker
   }
   output {
     File intervals = "sorted.interval_list"
@@ -205,7 +201,7 @@ task SamToFastq {
   input {
     File input_bam
     String base_file_name
-    String taskModules
+    String taskDocker
   }
 
   command {
@@ -213,13 +209,13 @@ task SamToFastq {
 
     gatk --java-options "-Dsamjdk.compression_level=5 -Xms4g" \
       SamToFastq \
-      --INPUT=~{input_bam} \
-      --FASTQ=~{base_file_name}.fastq \
-      --INTERLEAVE=true \
-      --INCLUDE_NON_PF_READS=true 
+      --INPUT ~{input_bam} \
+      --FASTQ ~{base_file_name}.fastq \
+      --INTERLEAVE true \
+      --INCLUDE_NON_PF_READS true 
   }
   runtime {
-    modules: taskModules
+    docker: taskDocker
   }
   output {
     File output_fastq = "~{base_file_name}.fastq"
@@ -241,7 +237,7 @@ task BwaMem {
   File ref_pac
   File ref_sa
   Int cpuNeeded
-  String taskModules
+  String taskDocker
   }
 
   command {
@@ -253,7 +249,7 @@ task BwaMem {
     samtools view -1bS -@ ~{cpuNeeded - 1} -o ~{base_file_name}.aligned.bam ~{base_file_name}.sam
   }
   runtime {
-    modules: taskModules
+    docker: taskDocker
     memory: "33GB"
     cpu: cpuNeeded
   }
@@ -272,7 +268,7 @@ task MergeBamAlignment {
   File ref_fasta
   File ref_fasta_index
   File ref_dict
-  String taskModules
+  String taskDocker
   }
   command {
     set -eo pipefail
@@ -300,7 +296,7 @@ task MergeBamAlignment {
       --CREATE_INDEX true
   }
   runtime {
-    modules: taskModules
+    docker: taskDocker
   }
   output {
     File output_bam = "~{base_file_name}.merged.bam"
@@ -322,7 +318,7 @@ task ApplyBaseRecalibrator {
   File ref_dict
   File ref_fasta
   File ref_fasta_index
-  String taskModules
+  String taskDocker
   }
   command {
   set -eo pipefail
@@ -353,7 +349,7 @@ task ApplyBaseRecalibrator {
 
   }
   runtime {
-    modules: taskModules
+    docker: taskDocker
 
   }
   output {
@@ -375,7 +371,7 @@ task HaplotypeCaller {
   File ref_fasta
   File ref_fasta_index
   File dbSNP_vcf
-  String taskModules
+  String taskDocker
   }
 
   command {
@@ -391,7 +387,7 @@ task HaplotypeCaller {
     }
 
   runtime {
-    modules: taskModules
+    docker: taskDocker
   }
 
   output {
@@ -409,15 +405,14 @@ task annovar {
   String ref_name
   String annovar_protocols
   String annovar_operation
-  String annovarDIR
-  String taskModules
+  String taskDocker
   String base_vcf_name = basename(input_vcf, ".vcf")
   }
   
   command {
   set -eo pipefail
   
-  perl ~{annovarDIR}/annovar/table_annovar.pl ~{input_vcf} ~{annovarDIR}/annovar/humandb/ \
+  perl /annovar/table_annovar.pl ~{input_vcf} /annovar/humandb/ \
     -buildver ~{ref_name} \
     -outfile ~{base_vcf_name} \
     -remove \
@@ -427,7 +422,7 @@ task annovar {
   }
 
   runtime {
-    modules: taskModules
+    docker: taskDocker
   }
 
   output {

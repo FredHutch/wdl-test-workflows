@@ -1,0 +1,36 @@
+name: WOMtool Validation of WDL Script
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  womtoolval:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      -
+        name: Pull WOMtool Jarfile
+        run: wget -q https://github.com/broadinstitute/cromwell/releases/download/86/womtool-86.jar
+      -
+        name: Validate WDL Scripts
+        run: |
+          java -jar womtool-86.jar validate helloHostname/helloHostname.wdl
+          java -jar womtool-86.jar validate helloHostname/helloSingularityHostname.wdl
+          java -jar womtool-86.jar validate parseBatchFile/parseBatchFile.wdl -i parseBatchFile/parseBatchFile-inputs.json
+          java -jar womtool-86.jar validate variantCalling/variantCalling.wdl -i variantCalling/variantCalling-inputs.json
+
+
+

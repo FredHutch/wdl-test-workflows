@@ -1,5 +1,5 @@
 {
-  "Panel_BWA_GATK4_Annovar.referenceGenome": 
+  "PanelBwaGatk4Annovar.reference_genome": 
     { "ref_name":  "hg38",
       "ref_fasta": "/fh/fast/paguirigan_a/pub/ReferenceDataSets/genome_data/human/hg38/Homo_sapiens_assembly38.fasta",
       "ref_fasta_index": "/fh/fast/paguirigan_a/pub/ReferenceDataSets/genome_data/human/hg38/Homo_sapiens_assembly38.fasta.fai",
